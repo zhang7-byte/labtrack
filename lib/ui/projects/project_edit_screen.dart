@@ -7,30 +7,10 @@ import '../app_database_provider.dart';
 import '../labels.dart';
 
 /// Create (when [project] is null) or edit a single project.
-///
-/// In [embedded] mode the form renders without its own Scaffold/AppBar so it can
-/// live inside a desktop master-detail pane: it shows a slim header with a Save
-/// (and, when creating, Cancel) action and calls [onSaved]/[onCancel] instead of
-/// popping a route.
 class ProjectEditScreen extends StatefulWidget {
-  const ProjectEditScreen({
-    super.key,
-    this.project,
-    this.embedded = false,
-    this.onSaved,
-    this.onCancel,
-  });
+  const ProjectEditScreen({super.key, this.project});
 
   final Project? project;
-
-  /// Render as an embedded pane (no Scaffold/AppBar) rather than a full route.
-  final bool embedded;
-
-  /// Called after a successful save when [embedded] (instead of popping).
-  final VoidCallback? onSaved;
-
-  /// Called when the user cancels an embedded "new project" form.
-  final VoidCallback? onCancel;
 
   bool get isEditing => project != null;
 
@@ -92,7 +72,7 @@ class _ProjectEditScreenState extends State<ProjectEditScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     final repo = ProjectRepository(AppDatabaseProvider.of(context));
-    final navigator = widget.embedded ? null : Navigator.of(context);
+    final navigator = Navigator.of(context);
     setState(() => _saving = true);
     try {
       final tags = _parseTags();
@@ -122,11 +102,7 @@ class _ProjectEditScreenState extends State<ProjectEditScreen> {
           ),
         );
       }
-      if (widget.embedded) {
-        widget.onSaved?.call();
-      } else {
-        navigator!.pop();
-      }
+      navigator.pop();
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -134,9 +110,17 @@ class _ProjectEditScreenState extends State<ProjectEditScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final canSave = !_saving;
-    final Widget body = Form(
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.isEditing ? 'Edit project' : 'New project'),
+        actions: [
+          TextButton(
+            onPressed: _saving ? null : _save,
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+      body: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -200,57 +184,6 @@ class _ProjectEditScreenState extends State<ProjectEditScreen> {
             ),
           ],
         ),
-      );
-
-    if (widget.embedded) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _embeddedHeader(scheme, canSave),
-          const Divider(height: 1),
-          Expanded(child: body),
-        ],
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.isEditing ? 'Edit project' : 'New project'),
-        actions: [
-          TextButton(
-            onPressed: canSave ? _save : null,
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-      body: body,
-    );
-  }
-
-  /// Slim toolbar shown above the form when [ProjectEditScreen.embedded].
-  Widget _embeddedHeader(ColorScheme scheme, bool canSave) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 16, 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              widget.isEditing ? 'Project' : 'New project',
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: scheme.onSurface),
-            ),
-          ),
-          if (!widget.isEditing && widget.onCancel != null)
-            TextButton(
-                onPressed: _saving ? null : widget.onCancel,
-                child: const Text('Cancel')),
-          const SizedBox(width: 8),
-          FilledButton(
-              onPressed: canSave ? _save : null,
-              child: Text(_saving ? 'Saving…' : 'Save')),
-        ],
       ),
     );
   }

@@ -7,34 +7,13 @@ import '../app_database_provider.dart';
 import '../labels.dart';
 
 /// Create (when [reagent] is null) or edit a reagent or buffer.
-///
-/// In [embedded] mode the form renders without its own Scaffold/AppBar so it can
-/// live inside a desktop master-detail pane: it shows a slim header with a Save
-/// (and, when creating, Cancel) action and calls [onSaved]/[onCancel] instead of
-/// popping a route.
 class ReagentEditScreen extends StatefulWidget {
-  const ReagentEditScreen({
-    super.key,
-    this.reagent,
-    this.initialKind,
-    this.embedded = false,
-    this.onSaved,
-    this.onCancel,
-  });
+  const ReagentEditScreen({super.key, this.reagent, this.initialKind});
 
   final Reagent? reagent;
 
   /// Default kind for a NEW entry: 'reagent' (default) or 'buffer'.
   final String? initialKind;
-
-  /// Render as an embedded pane (no Scaffold/AppBar) rather than a full route.
-  final bool embedded;
-
-  /// Called after a successful save when [embedded] (instead of popping).
-  final VoidCallback? onSaved;
-
-  /// Called when the user cancels an embedded "new reagent" form.
-  final VoidCallback? onCancel;
 
   bool get isEditing => reagent != null;
 
@@ -82,7 +61,7 @@ class _ReagentEditScreenState extends State<ReagentEditScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     final repo = ReagentRepository(AppDatabaseProvider.of(context));
-    final navigator = widget.embedded ? null : Navigator.of(context);
+    final navigator = Navigator.of(context);
     setState(() => _saving = true);
     try {
       if (widget.isEditing) {
@@ -115,11 +94,7 @@ class _ReagentEditScreenState extends State<ReagentEditScreen> {
           notes: Value(_t('notes')),
         ));
       }
-      if (widget.embedded) {
-        widget.onSaved?.call();
-      } else {
-        if (mounted) navigator!.pop();
-      }
+      if (mounted) navigator.pop();
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -144,9 +119,15 @@ class _ReagentEditScreenState extends State<ReagentEditScreen> {
   @override
   Widget build(BuildContext context) {
     final noun = _isBuffer ? 'buffer' : 'reagent';
-    final scheme = Theme.of(context).colorScheme;
-    final canSave = !_saving;
-    final Widget body = Form(
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.isEditing ? 'Edit $noun' : 'New $noun'),
+        actions: [
+          TextButton(
+              onPressed: _saving ? null : _save, child: const Text('Save')),
+        ],
+      ),
+      body: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -205,55 +186,6 @@ class _ReagentEditScreenState extends State<ReagentEditScreen> {
             _field('notes', 'Notes', maxLines: 4),
           ],
         ),
-      );
-
-    if (widget.embedded) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _embeddedHeader(scheme, canSave),
-          const Divider(height: 1),
-          Expanded(child: body),
-        ],
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.isEditing ? 'Edit $noun' : 'New $noun'),
-        actions: [
-          TextButton(
-              onPressed: canSave ? _save : null, child: const Text('Save')),
-        ],
-      ),
-      body: body,
-    );
-  }
-
-  /// Slim toolbar shown above the form when [ReagentEditScreen.embedded].
-  Widget _embeddedHeader(ColorScheme scheme, bool canSave) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 16, 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              widget.isEditing ? 'Reagent' : 'New reagent',
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: scheme.onSurface),
-            ),
-          ),
-          if (!widget.isEditing && widget.onCancel != null)
-            TextButton(
-                onPressed: _saving ? null : widget.onCancel,
-                child: const Text('Cancel')),
-          const SizedBox(width: 8),
-          FilledButton(
-              onPressed: canSave ? _save : null,
-              child: Text(_saving ? 'Saving…' : 'Save')),
-        ],
       ),
     );
   }

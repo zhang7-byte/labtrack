@@ -24,32 +24,10 @@ class _Step {
 /// Create (when [protocol] is null) or edit a protocol: name / category /
 /// summary, a step-by-step composer with per-step annotated images, materials,
 /// notes and general images. Exportable to a self-contained PDF.
-///
-/// In [embedded] mode the form renders without its own Scaffold/AppBar so it can
-/// live inside a desktop master-detail pane: it shows a slim header with a Save
-/// (and, when creating, Cancel) action and calls [onSaved]/[onCancel] instead of
-/// popping a route.
 class ProtocolEditScreen extends StatefulWidget {
-  const ProtocolEditScreen({
-    super.key,
-    this.protocol,
-    this.embedded = false,
-    this.onSaved,
-    this.onCancel,
-  });
+  const ProtocolEditScreen({super.key, this.protocol});
 
   final Protocol? protocol;
-
-  /// Render as an embedded pane (no Scaffold/AppBar) rather than a full route.
-  final bool embedded;
-
-  /// Called after a successful save when [embedded] (instead of popping).
-  final VoidCallback? onSaved;
-
-  /// Called when the user cancels an embedded "new protocol" form.
-  final VoidCallback? onCancel;
-
-  bool get isEditing => protocol != null;
 
   @override
   State<ProtocolEditScreen> createState() => _ProtocolEditScreenState();
@@ -134,16 +112,11 @@ class _ProtocolEditScreenState extends State<ProtocolEditScreen> {
   }
 
   Future<void> _save() async {
-    final navigator = widget.embedded ? null : Navigator.of(context);
+    final navigator = Navigator.of(context);
     setState(() => _busy = true);
     try {
       await _persist();
-      if (!mounted) return;
-      if (widget.embedded) {
-        widget.onSaved?.call();
-      } else {
-        navigator!.pop();
-      }
+      if (mounted) navigator.pop();
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -188,8 +161,20 @@ class _ProtocolEditScreenState extends State<ProtocolEditScreen> {
     final editing = widget.protocol != null;
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    final canSave = !_busy;
-    final Widget body = ListView(
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(editing ? 'Edit protocol' : 'New protocol'),
+        actions: [
+          IconButton(
+            tooltip: 'Export to PDF',
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            onPressed: _busy ? null : _export,
+          ),
+          TextButton(
+              onPressed: _busy ? null : _save, child: const Text('Save')),
+        ],
+      ),
+      body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           TextField(
@@ -270,60 +255,6 @@ class _ProtocolEditScreenState extends State<ProtocolEditScreen> {
             icon: const Icon(Icons.picture_as_pdf_outlined),
             label: const Text('Export PDF'),
           ),
-        ],
-      );
-
-    if (widget.embedded) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _embeddedHeader(scheme, canSave),
-          const Divider(height: 1),
-          Expanded(child: body),
-        ],
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(editing ? 'Edit protocol' : 'New protocol'),
-        actions: [
-          IconButton(
-            tooltip: 'Export to PDF',
-            icon: const Icon(Icons.picture_as_pdf_outlined),
-            onPressed: _busy ? null : _export,
-          ),
-          TextButton(
-              onPressed: _busy ? null : _save, child: const Text('Save')),
-        ],
-      ),
-      body: body,
-    );
-  }
-
-  /// Slim toolbar shown above the form when [ProtocolEditScreen.embedded].
-  Widget _embeddedHeader(ColorScheme scheme, bool canSave) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 16, 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              widget.isEditing ? 'Protocol' : 'New protocol',
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: scheme.onSurface),
-            ),
-          ),
-          if (!widget.isEditing && widget.onCancel != null)
-            TextButton(
-                onPressed: _busy ? null : widget.onCancel,
-                child: const Text('Cancel')),
-          const SizedBox(width: 8),
-          FilledButton(
-              onPressed: canSave ? _save : null,
-              child: Text(_busy ? 'Saving…' : 'Save')),
         ],
       ),
     );

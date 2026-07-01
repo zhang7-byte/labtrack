@@ -9,34 +9,11 @@ import '../search_picker.dart';
 
 /// Create or edit a culture. A culture is usually started from a strain, so the
 /// strain can be pre-filled via [defaultStrainId].
-///
-/// In [embedded] mode the form renders without its own Scaffold/AppBar so it can
-/// live inside a desktop master-detail pane: it shows a slim header with a Save
-/// (and, when creating, Cancel) action and calls [onSaved]/[onCancel] instead of
-/// popping a route.
 class CultureEditScreen extends StatefulWidget {
-  const CultureEditScreen({
-    super.key,
-    this.culture,
-    this.defaultStrainId,
-    this.embedded = false,
-    this.onSaved,
-    this.onCancel,
-  });
+  const CultureEditScreen({super.key, this.culture, this.defaultStrainId});
 
   final Culture? culture;
   final String? defaultStrainId;
-
-  /// Render as an embedded pane (no Scaffold/AppBar) rather than a full route.
-  final bool embedded;
-
-  /// Called after a successful save when [embedded] (instead of popping).
-  final VoidCallback? onSaved;
-
-  /// Called when the user cancels an embedded "new culture" form.
-  final VoidCallback? onCancel;
-
-  bool get isEditing => culture != null;
 
   @override
   State<CultureEditScreen> createState() => _CultureEditScreenState();
@@ -53,7 +30,6 @@ class _CultureEditScreenState extends State<CultureEditScreen> {
   String? _strainId;
   List<Strain> _strains = const [];
   bool _prefilledOnce = false;
-  bool _saving = false;
 
   @override
   void initState() {
@@ -106,42 +82,32 @@ class _CultureEditScreenState extends State<CultureEditScreen> {
       .toList();
 
   Future<void> _save(CultureRepository repo) async {
-    final navigator = widget.embedded ? null : Navigator.of(context);
-    setState(() => _saving = true);
-    try {
-      final values = CulturesCompanion(
-        name: Value(_name.text.trim()),
-        strainId: Value(_strainId),
-        medium: Value(_medium.text.trim()),
-        vessel: Value(_vessel.text.trim()),
-        inoculumAmount: Value(_inoculum.text.trim()),
-        selectionMarkers: Value(_list(_markers)),
-        notes: Value(_notes.text.trim()),
-        purpose: Value(_purpose.text.trim()),
-      );
-      if (widget.culture == null) {
-        await repo.create(values);
-      } else {
-        await repo.update(widget.culture!.id, values);
-      }
-      if (widget.embedded) {
-        widget.onSaved?.call();
-      } else {
-        navigator!.pop();
-      }
-    } finally {
-      if (mounted) setState(() => _saving = false);
+    final values = CulturesCompanion(
+      name: Value(_name.text.trim()),
+      strainId: Value(_strainId),
+      medium: Value(_medium.text.trim()),
+      vessel: Value(_vessel.text.trim()),
+      inoculumAmount: Value(_inoculum.text.trim()),
+      selectionMarkers: Value(_list(_markers)),
+      notes: Value(_notes.text.trim()),
+      purpose: Value(_purpose.text.trim()),
+    );
+    if (widget.culture == null) {
+      await repo.create(values);
+    } else {
+      await repo.update(widget.culture!.id, values);
     }
+    if (mounted) Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
     final db = AppDatabaseProvider.of(context);
     final repo = CultureRepository(db);
-    final scheme = Theme.of(context).colorScheme;
     final editing = widget.culture != null;
-    final canSave = !_saving;
-    final Widget body = FutureBuilder<List<Strain>>(
+    return Scaffold(
+      appBar: AppBar(title: Text(editing ? 'Edit culture' : 'New culture')),
+      body: FutureBuilder<List<Strain>>(
         future: StrainRepository(db).all(),
         builder: (context, snap) {
           _strains = snap.data ?? _strains;
@@ -226,63 +192,15 @@ class _CultureEditScreenState extends State<CultureEditScreen> {
                 maxLines: 5,
                 decoration: const InputDecoration(labelText: 'Notes'),
               ),
-              if (!widget.embedded) ...[
-                const SizedBox(height: 24),
-                FilledButton.icon(
-                  onPressed: canSave ? () => _save(repo) : null,
-                  icon: const Icon(Icons.check),
-                  label: Text(_saving
-                      ? 'Saving…'
-                      : (editing ? 'Save' : 'Start culture')),
-                ),
-              ],
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: () => _save(repo),
+                icon: const Icon(Icons.check),
+                label: Text(editing ? 'Save' : 'Start culture'),
+              ),
             ],
           );
         },
-      );
-
-    if (widget.embedded) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _embeddedHeader(scheme, repo, canSave),
-          const Divider(height: 1),
-          Expanded(child: body),
-        ],
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(title: Text(editing ? 'Edit culture' : 'New culture')),
-      body: body,
-    );
-  }
-
-  /// Slim toolbar shown above the form when [CultureEditScreen.embedded].
-  Widget _embeddedHeader(
-      ColorScheme scheme, CultureRepository repo, bool canSave) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 16, 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              widget.isEditing ? 'Culture' : 'New culture',
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: scheme.onSurface),
-            ),
-          ),
-          if (!widget.isEditing && widget.onCancel != null)
-            TextButton(
-                onPressed: _saving ? null : widget.onCancel,
-                child: const Text('Cancel')),
-          const SizedBox(width: 8),
-          FilledButton(
-              onPressed: canSave ? () => _save(repo) : null,
-              child: Text(_saving ? 'Saving…' : 'Save')),
-        ],
       ),
     );
   }

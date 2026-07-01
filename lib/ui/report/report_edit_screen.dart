@@ -15,32 +15,10 @@ import '../labels.dart';
 /// summary, a project/experiment selection (empty = everything), and inserted
 /// figures. The data sections are gathered live when exported (see
 /// [buildReportPdf]).
-///
-/// In [embedded] mode the form renders without its own Scaffold/AppBar so it can
-/// live inside a desktop master-detail pane: it shows a slim header with a Save
-/// (and, when creating, Cancel) action and calls [onSaved]/[onCancel] instead of
-/// popping a route.
 class ReportEditScreen extends StatefulWidget {
-  const ReportEditScreen({
-    super.key,
-    this.report,
-    this.embedded = false,
-    this.onSaved,
-    this.onCancel,
-  });
+  const ReportEditScreen({super.key, this.report});
 
   final Report? report;
-
-  /// Render as an embedded pane (no Scaffold/AppBar) rather than a full route.
-  final bool embedded;
-
-  /// Called after a successful save when [embedded] (instead of popping).
-  final VoidCallback? onSaved;
-
-  /// Called when the user cancels an embedded "new report" form.
-  final VoidCallback? onCancel;
-
-  bool get isEditing => report != null;
 
   @override
   State<ReportEditScreen> createState() => _ReportEditScreenState();
@@ -135,15 +113,11 @@ class _ReportEditScreenState extends State<ReportEditScreen> {
 
   Future<void> _save() async {
     final repo = ReportRepository(AppDatabaseProvider.of(context));
-    final navigator = widget.embedded ? null : Navigator.of(context);
+    final navigator = Navigator.of(context);
     setState(() => _busy = true);
     try {
       await _persist(repo);
-      if (widget.embedded) {
-        widget.onSaved?.call();
-      } else {
-        navigator!.pop();
-      }
+      navigator.pop();
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -175,8 +149,20 @@ class _ReportEditScreenState extends State<ReportEditScreen> {
     final editing = widget.report != null;
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    final canSave = !_busy;
-    final Widget body = ListView(
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(editing ? 'Edit report' : 'New report'),
+        actions: [
+          IconButton(
+            tooltip: 'Export to PDF',
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            onPressed: _busy ? null : _export,
+          ),
+          TextButton(
+              onPressed: _busy ? null : _save, child: const Text('Save')),
+        ],
+      ),
+      body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           TextField(
@@ -274,60 +260,6 @@ class _ReportEditScreenState extends State<ReportEditScreen> {
             icon: const Icon(Icons.picture_as_pdf_outlined),
             label: const Text('Export PDF'),
           ),
-        ],
-      );
-
-    if (widget.embedded) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _embeddedHeader(scheme, canSave),
-          const Divider(height: 1),
-          Expanded(child: body),
-        ],
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(editing ? 'Edit report' : 'New report'),
-        actions: [
-          IconButton(
-            tooltip: 'Export to PDF',
-            icon: const Icon(Icons.picture_as_pdf_outlined),
-            onPressed: _busy ? null : _export,
-          ),
-          TextButton(
-              onPressed: canSave ? _save : null, child: const Text('Save')),
-        ],
-      ),
-      body: body,
-    );
-  }
-
-  /// Slim toolbar shown above the form when [ReportEditScreen.embedded].
-  Widget _embeddedHeader(ColorScheme scheme, bool canSave) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 16, 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              widget.isEditing ? 'Report' : 'New report',
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: scheme.onSurface),
-            ),
-          ),
-          if (!widget.isEditing && widget.onCancel != null)
-            TextButton(
-                onPressed: _busy ? null : widget.onCancel,
-                child: const Text('Cancel')),
-          const SizedBox(width: 8),
-          FilledButton(
-              onPressed: canSave ? _save : null,
-              child: Text(_busy ? 'Saving…' : 'Save')),
         ],
       ),
     );

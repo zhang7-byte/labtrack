@@ -40,32 +40,10 @@ class _FragmentDraft {
 }
 
 /// Create (when [construction] is null) or edit one Gibson clone construction.
-///
-/// In [embedded] mode the form renders without its own Scaffold/AppBar so it can
-/// live inside a desktop master-detail pane: it shows a slim header with a Save
-/// (and, when creating, Cancel) action and calls [onSaved]/[onCancel] instead of
-/// popping a route.
 class CloneEditScreen extends StatefulWidget {
-  const CloneEditScreen({
-    super.key,
-    this.construction,
-    this.embedded = false,
-    this.onSaved,
-    this.onCancel,
-  });
+  const CloneEditScreen({super.key, this.construction});
 
   final CloneConstruction? construction;
-
-  /// Render as an embedded pane (no Scaffold/AppBar) rather than a full route.
-  final bool embedded;
-
-  /// Called after a successful save when [embedded] (instead of popping).
-  final VoidCallback? onSaved;
-
-  /// Called when the user cancels an embedded "new construction" form.
-  final VoidCallback? onCancel;
-
-  bool get isEditing => construction != null;
 
   @override
   State<CloneEditScreen> createState() => _CloneEditScreenState();
@@ -165,15 +143,11 @@ class _CloneEditScreenState extends State<CloneEditScreen> {
 
   Future<void> _save() async {
     final repo = CloneRepository(AppDatabaseProvider.of(context));
-    final navigator = widget.embedded ? null : Navigator.of(context);
+    final navigator = Navigator.of(context);
     setState(() => _busy = true);
     try {
       await _persist(repo);
-      if (widget.embedded) {
-        widget.onSaved?.call();
-      } else {
-        navigator!.pop();
-      }
+      navigator.pop();
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -204,8 +178,19 @@ class _CloneEditScreenState extends State<CloneEditScreen> {
   Widget build(BuildContext context) {
     final editing = widget.construction != null;
     final scheme = Theme.of(context).colorScheme;
-    final canSave = !(_busy || _loading);
-    final Widget body = _loading
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(editing ? 'Edit construction' : 'New construction'),
+        actions: [
+          IconButton(
+            tooltip: 'Export to PDF',
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            onPressed: _busy ? null : _export,
+          ),
+          TextButton(onPressed: _busy ? null : _save, child: const Text('Save')),
+        ],
+      ),
+      body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
@@ -314,60 +299,7 @@ class _CloneEditScreenState extends State<CloneEditScreen> {
                   label: const Text('Export PDF'),
                 ),
               ],
-            );
-
-    if (widget.embedded) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _embeddedHeader(scheme, canSave),
-          const Divider(height: 1),
-          Expanded(child: body),
-        ],
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(editing ? 'Edit construction' : 'New construction'),
-        actions: [
-          IconButton(
-            tooltip: 'Export to PDF',
-            icon: const Icon(Icons.picture_as_pdf_outlined),
-            onPressed: _busy ? null : _export,
-          ),
-          TextButton(onPressed: _busy ? null : _save, child: const Text('Save')),
-        ],
-      ),
-      body: body,
-    );
-  }
-
-  /// Slim toolbar shown above the form when [CloneEditScreen.embedded].
-  Widget _embeddedHeader(ColorScheme scheme, bool canSave) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 16, 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              widget.isEditing ? 'Construction' : 'New construction',
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: scheme.onSurface),
             ),
-          ),
-          if (!widget.isEditing && widget.onCancel != null)
-            TextButton(
-                onPressed: _busy ? null : widget.onCancel,
-                child: const Text('Cancel')),
-          const SizedBox(width: 8),
-          FilledButton(
-              onPressed: canSave ? _save : null,
-              child: Text(_busy ? 'Saving…' : 'Save')),
-        ],
-      ),
     );
   }
 
