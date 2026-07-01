@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 
 import 'lock.dart';
@@ -44,8 +45,12 @@ class GlassSurface extends StatelessWidget {
 
     Widget body = child;
     // A faint top-down specular highlight gives the frosted panel a glassy
-    // "liquid glass" sheen. Painted behind the content so text stays crisp.
+    // "liquid glass" sheen. Painted behind the content so text stays crisp. On
+    // iOS the sheen is pushed further toward Apple's Liquid Glass look: a
+    // brighter top specular, a soft light bounce at the bottom, and a crisp
+    // bright hairline along the top edge (all clipped to the rounded shape).
     if (sheen && active) {
+      final ios = defaultTargetPlatform == TargetPlatform.iOS;
       body = Stack(
         children: [
           Positioned.fill(
@@ -56,17 +61,41 @@ class GlassSurface extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.white.withValues(alpha: 0.14),
-                      Colors.white.withValues(alpha: 0.0),
-                      Colors.white.withValues(alpha: 0.05),
-                    ],
-                    stops: const [0.0, 0.55, 1.0],
+                    colors: ios
+                        ? [
+                            Colors.white.withValues(alpha: 0.30),
+                            Colors.white.withValues(alpha: 0.06),
+                            Colors.white.withValues(alpha: 0.0),
+                            Colors.white.withValues(alpha: 0.12),
+                          ]
+                        : [
+                            Colors.white.withValues(alpha: 0.14),
+                            Colors.white.withValues(alpha: 0.0),
+                            Colors.white.withValues(alpha: 0.05),
+                          ],
+                    stops: ios
+                        ? const [0.0, 0.14, 0.6, 1.0]
+                        : const [0.0, 0.55, 1.0],
                   ),
                 ),
               ),
             ),
           ),
+          // Bright specular rim along the top edge — the tell-tale Liquid Glass
+          // highlight. Clipped to the panel's rounded corners by the outer
+          // ClipRRect below.
+          if (ios)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: IgnorePointer(
+                child: Container(
+                  height: 1.2,
+                  color: Colors.white.withValues(alpha: 0.55),
+                ),
+              ),
+            ),
           child,
         ],
       );

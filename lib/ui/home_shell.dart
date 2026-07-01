@@ -323,10 +323,12 @@ class _HomeShellState extends State<HomeShell> {
     }
 
     final selected = _index < _primaryCount ? _index : _primaryCount;
+    // On iOS the bar is a floating Liquid Glass pill, so let content flow under
+    // it (extendBody) — that's what gives the blur real content to frost and
+    // makes it read as translucent glass rather than a solid strip. Elsewhere
+    // the bar is flush, so the body stays laid out above it.
     return Scaffold(
-      // No extendBody: the body is laid out ABOVE the bottom bar, so per-tab
-      // FABs and scrollable content never hide behind it. The bar handles its
-      // own SafeArea (home indicator) inset.
+      extendBody: defaultTargetPlatform == TargetPlatform.iOS,
       body: body,
       bottomNavigationBar: _bottomBar(context, selected),
     );
@@ -338,11 +340,70 @@ class _HomeShellState extends State<HomeShell> {
   /// with an accent label.
   Widget _bottomBar(BuildContext context, int selected) {
     final scheme = Theme.of(context).colorScheme;
+    final isIOS = defaultTargetPlatform == TargetPlatform.iOS;
     final items = <(IconData, IconData, String)>[
       for (int i = 0; i < _primaryCount; i++)
         (_dests[i].icon, _dests[i].selectedIcon, _dests[i].label),
       (Icons.more_horiz, Icons.more_horiz, 'More'),
     ];
+    final row = Row(
+      children: [
+        for (int i = 0; i < items.length; i++)
+          Expanded(
+            child: _NavButton(
+              icon: items[i].$1,
+              selectedIcon: items[i].$2,
+              label: items[i].$3,
+              selected: i == selected,
+              compact: isIOS,
+              onTap: () {
+                if (i < _primaryCount) {
+                  setState(() => _index = i);
+                } else {
+                  _openMore();
+                }
+              },
+            ),
+          ),
+      ],
+    );
+
+    // iOS: a floating Liquid Glass pill that hovers above the home indicator,
+    // with a specular rim and a soft drop shadow.
+    if (isIOS) {
+      final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+      final radius = BorderRadius.circular(30);
+      return Padding(
+        padding: EdgeInsets.only(
+            left: 16, right: 16, bottom: bottomInset > 0 ? bottomInset : 12),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            boxShadow: [
+              BoxShadow(
+                  color: scheme.shadow,
+                  blurRadius: 22,
+                  offset: const Offset(0, 8)),
+            ],
+          ),
+          child: GlassSurface(
+            blur: 34,
+            // More see-through so the frosted content reads as glass.
+            opacity: 0.40,
+            sheen: true,
+            borderRadius: radius,
+            border:
+                Border.all(color: scheme.outlineVariant.withValues(alpha: 0.6)),
+            child: Material(
+              type: MaterialType.transparency,
+              child: SizedBox(height: 54, child: row),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Other platforms: a full-width frosted bar flush to the bottom edge.
     return GlassSurface(
       blur: 26,
       opacity: 0.66,
@@ -355,29 +416,7 @@ class _HomeShellState extends State<HomeShell> {
         top: false,
         child: Material(
           type: MaterialType.transparency,
-          child: SizedBox(
-            height: 64,
-            child: Row(
-              children: [
-                for (int i = 0; i < items.length; i++)
-                  Expanded(
-                    child: _NavButton(
-                      icon: items[i].$1,
-                      selectedIcon: items[i].$2,
-                      label: items[i].$3,
-                      selected: i == selected,
-                      onTap: () {
-                        if (i < _primaryCount) {
-                          setState(() => _index = i);
-                        } else {
-                          _openMore();
-                        }
-                      },
-                    ),
-                  ),
-              ],
-            ),
-          ),
+          child: SizedBox(height: 64, child: row),
         ),
       ),
     );
@@ -486,6 +525,7 @@ class _NavButton extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.compact = false,
   });
 
   final IconData icon;
@@ -493,6 +533,10 @@ class _NavButton extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
+
+  /// Slimmer icon/label + tighter selected badge, sized for the iOS floating
+  /// glass pill so nothing crowds its rounded edges.
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -506,24 +550,26 @@ class _NavButton extends StatelessWidget {
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOut,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+            padding: compact
+                ? const EdgeInsets.symmetric(horizontal: 11, vertical: 3)
+                : const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
             decoration: BoxDecoration(
               color: selected ? scheme.primary : Colors.transparent,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(compact ? 12 : 14),
             ),
             child: Icon(
               selected ? selectedIcon : icon,
-              size: 22,
+              size: compact ? 18 : 22,
               color: selected ? scheme.onPrimary : scheme.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: compact ? 2 : 4),
           Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: compact ? 9.5 : 11,
               height: 1.0,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
               color: selected ? scheme.primary : scheme.onSurfaceVariant,

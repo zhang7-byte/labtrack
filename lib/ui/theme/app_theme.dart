@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -81,6 +82,11 @@ ThemeData buildAppTheme({
   final accentSoft = acc.withValues(alpha: dark ? 0.16 : 0.10);
   final radius = BorderRadius.circular(10);
   final radiusLg = BorderRadius.circular(16);
+
+  // iOS leans into the Liquid Glass aesthetic: controls are capsule "pills".
+  // Other platforms keep the default rounded-rect buttons.
+  final isIOS = defaultTargetPlatform == TargetPlatform.iOS;
+  const pillShape = StadiumBorder();
 
   final scheme = ColorScheme.fromSeed(seedColor: acc, brightness: brightness)
       .copyWith(
@@ -219,6 +225,22 @@ ThemeData buildAppTheme({
       selectedTileColor: accentSoft,
       iconColor: t.textMuted,
     ),
+
+    // Capsule buttons on iOS (Liquid Glass); untouched elsewhere.
+    filledButtonTheme: isIOS
+        ? FilledButtonThemeData(style: FilledButton.styleFrom(shape: pillShape))
+        : null,
+    elevatedButtonTheme: isIOS
+        ? ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(shape: pillShape))
+        : null,
+    outlinedButtonTheme: isIOS
+        ? OutlinedButtonThemeData(
+            style: OutlinedButton.styleFrom(shape: pillShape))
+        : null,
+    textButtonTheme: isIOS
+        ? TextButtonThemeData(style: TextButton.styleFrom(shape: pillShape))
+        : null,
 
     // Inputs are genuinely lifted: filled with the raised surface, hairline edge.
     inputDecorationTheme: InputDecorationTheme(
