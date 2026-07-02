@@ -207,9 +207,16 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String?>(
+                    isExpanded: true,
                     initialValue: _projectId,
                     decoration: const InputDecoration(
                         labelText: 'Project (optional)'),
+                    selectedItemBuilder: (context) => [
+                      const Text('None'),
+                      for (final p in projects)
+                        Text(p.title,
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ],
                     items: [
                       const DropdownMenuItem(value: null, child: Text('None')),
                       for (final p in projects)
@@ -219,9 +226,16 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String?>(
+                    isExpanded: true,
                     initialValue: _experimentId,
                     decoration: const InputDecoration(
                         labelText: 'Experiment (optional)'),
+                    selectedItemBuilder: (context) => [
+                      const Text('None'),
+                      for (final e in experiments)
+                        Text(e.title,
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ],
                     items: [
                       const DropdownMenuItem(value: null, child: Text('None')),
                       for (final e in experiments)

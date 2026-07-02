@@ -272,8 +272,14 @@ class _ExperimentEditScreenState extends State<ExperimentEditScreen> {
                     padding: const EdgeInsets.all(16),
                     children: [
                       DropdownButtonFormField<String>(
+                        isExpanded: true,
                         initialValue: _projectId,
                         decoration: const InputDecoration(labelText: 'Project'),
+                        selectedItemBuilder: (context) => [
+                          for (final p in projects)
+                            Text(p.title,
+                                maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ],
                         items: [
                           for (final p in projects)
                             DropdownMenuItem(value: p.id, child: Text(p.title)),
@@ -281,6 +287,7 @@ class _ExperimentEditScreenState extends State<ExperimentEditScreen> {
                         onChanged: (v) => setState(() => _projectId = v),
                         validator: (v) => v == null ? 'Pick a project' : null,
                       ),
+
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _title,
