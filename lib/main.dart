@@ -86,6 +86,8 @@ Future<void> main() async {
   await resolveDemoData(database);
   // Restore read-only (lockdown) mode if it was left on.
   await loadAppLock(database);
+  // Restore the privacy & data policy agreement (gates all app entry).
+  await loadPrivacyAgreed(database);
 
   // Single-instance mode (user preference): if a copy is already running, focus
   // it and exit before any window is shown.

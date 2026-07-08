@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../sync/cloud_config.dart';
@@ -28,13 +29,21 @@ class AuthGate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sync = SyncScope.of(context);
-    if (offline || (sync.isConfigured && sync.isSignedIn)) {
-      return const HomeShell();
-    }
-    return _AuthScreen(
-      sync: sync,
-      onConfigSaved: onConfigSaved,
-      onContinueOffline: onContinueOffline,
+    return ValueListenableBuilder<bool>(
+      valueListenable: privacyAgreed,
+      builder: (context, agreed, _) {
+        // The app can only be entered once the privacy & data policy has been
+        // accepted — this blocks both online (signed-in) and offline use, even
+        // for a returning user whose sign-in session was restored.
+        if (agreed && (offline || (sync.isConfigured && sync.isSignedIn))) {
+          return const HomeShell();
+        }
+        return _AuthScreen(
+          sync: sync,
+          onConfigSaved: onConfigSaved,
+          onContinueOffline: onContinueOffline,
+        );
+      },
     );
   }
 }
@@ -59,10 +68,13 @@ class _AuthScreenState extends State<_AuthScreen> {
   final _key = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
+  late final TapGestureRecognizer _policyTap =
+      TapGestureRecognizer()..onTap = _showPolicy;
   bool _busy = false;
   bool _obscureKey = true;
   bool _loaded = false;
   bool _showConfig = false;
+  bool _agreed = privacyAgreed.value;
   String? _error;
   String? _info;
 
@@ -71,7 +83,8 @@ class _AuthScreenState extends State<_AuthScreen> {
     super.didChangeDependencies();
     if (_loaded) return;
     _loaded = true;
-    readCloudConfig(AppDatabaseProvider.of(context)).then((cfg) {
+    final db = AppDatabaseProvider.of(context);
+    readCloudConfig(db).then((cfg) {
       if (!mounted) return;
       setState(() {
         _url.text = cfg.$1;
@@ -87,7 +100,65 @@ class _AuthScreenState extends State<_AuthScreen> {
     _key.dispose();
     _email.dispose();
     _password.dispose();
+    _policyTap.dispose();
     super.dispose();
+  }
+
+  void _setAgreed(bool v) {
+    setState(() => _agreed = v);
+    savePrivacyAgreed(AppDatabaseProvider.of(context), v);
+  }
+
+  void _showPolicy() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Privacy & Data Policy'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Text(_policyText,
+                style: const TextStyle(fontSize: 13, height: 1.45)),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  /// Checkbox + tappable "privacy and data policy" link. Gates all app entry.
+  Widget _agreementRow(ColorScheme scheme) {
+    return Row(
+      children: [
+        Checkbox(
+          value: _agreed,
+          onChanged: _busy ? null : (v) => _setAgreed(v ?? false),
+        ),
+        Expanded(
+          child: Text.rich(
+            TextSpan(
+              style: TextStyle(color: scheme.onSurface, fontSize: 13),
+              children: [
+                const TextSpan(text: 'I agree with the '),
+                TextSpan(
+                  text: 'privacy and data policy',
+                  style: TextStyle(
+                    color: scheme.primary,
+                    fontWeight: FontWeight.w600,
+                    decoration: TextDecoration.underline,
+                  ),
+                  recognizer: _policyTap,
+                ),
+                const TextSpan(text: '.'),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _run(Future<void> Function() action) async {
@@ -162,6 +233,19 @@ class _AuthScreenState extends State<_AuthScreen> {
                   style: TextStyle(color: scheme.onSurfaceVariant),
                 ),
                 const SizedBox(height: 24),
+
+                // Required privacy & data policy agreement — gates every entry
+                // (sign in, create account, continue offline) until accepted.
+                _agreementRow(scheme),
+                if (!_agreed)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12, top: 2),
+                    child: Text(
+                        'You must accept the policy to sign in or continue.',
+                        style: TextStyle(
+                            color: scheme.onSurfaceVariant, fontSize: 11)),
+                  ),
+                const SizedBox(height: 20),
 
                 // ---- Cloud connection ----
                 if (configured)
@@ -239,7 +323,7 @@ class _AuthScreenState extends State<_AuthScreen> {
                   ),
                   const SizedBox(height: 16),
                   FilledButton(
-                    onPressed: _busy
+                    onPressed: (_busy || !_agreed)
                         ? null
                         : () {
                             final err = _validate();
@@ -259,7 +343,7 @@ class _AuthScreenState extends State<_AuthScreen> {
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton(
-                    onPressed: _busy
+                    onPressed: (_busy || !_agreed)
                         ? null
                         : () {
                             final err = _validate(signup: true);
@@ -296,7 +380,8 @@ class _AuthScreenState extends State<_AuthScreen> {
                 // stays on this device; sync resumes once you sign in.
                 const Divider(height: 32),
                 TextButton.icon(
-                  onPressed: _busy ? null : widget.onContinueOffline,
+                  onPressed:
+                      (_busy || !_agreed) ? null : widget.onContinueOffline,
                   icon: const Icon(Icons.cloud_off_outlined, size: 18),
                   label: const Text('Continue offline (local only)'),
                 ),
@@ -308,3 +393,25 @@ class _AuthScreenState extends State<_AuthScreen> {
     );
   }
 }
+
+const _policyText = '''
+LabTrack — Privacy & Data Policy
+
+LabTrack is a local-first laboratory management application developed by the Su Lab (MBBE, University of Hawaii at Manoa).
+
+1. Local data
+All of your data — projects, experiments, tasks, strains, reagents, cultures, primers, protocols, reports, images and settings — is stored locally on this device in an on-device database. It does not leave this device unless you explicitly enable Cloud Sync.
+
+2. Optional cloud sync
+If you configure Cloud Sync, your data is sent to and stored on the Supabase project whose URL and key you provide and control. Syncing only runs when you press "Push" or "Pull" (or when sync-on-close is enabled). If you never configure Cloud Sync, no data is transmitted anywhere.
+
+3. No tracking
+LabTrack contains no advertising, analytics, telemetry or third-party tracking. It collects no usage statistics and makes no network connection except to the Supabase backend you configure.
+
+4. Notifications
+Deadline and schedule reminders are generated and shown locally on this device. No reminder content is sent off-device.
+
+5. Your control
+You can export your data to PDF or a backup file at any time, and delete any or all of it from within the app.
+
+By checking "I agree", you confirm that you have read and accept this Privacy & Data Policy. You must accept it to use LabTrack.''';
